@@ -1,5 +1,5 @@
 //
-//  MetalGemmTunedV1.metal
+//  MetalGemmTuned.metal
 //  MetalGemm
 //
 //  Created by Lun on 17/11/2017.
@@ -15,7 +15,7 @@ typedef struct {
     float alpha, beta;
 } MetalMatrixDim;
 
-constant uint BLOCK_SIZE = 1 << 3;
+constant uint BLOCK_SIZE = 8;
 
 kernel void MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
                              const device float        *B   [[ buffer(1) ]],
@@ -26,24 +26,29 @@ kernel void MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
     const uint m = dims.m;
     const uint n = dims.n;
     const uint k = dims.k;
+    const float alpha = dims.alpha;
+    const float beta  = dims.beta;
     const uint2 gidIn = gid << 3;
     
     if (n - gidIn.x < BLOCK_SIZE || m - gidIn.y < BLOCK_SIZE) return;
     else {
         threadgroup float As[BLOCK_SIZE][BLOCK_SIZE];
         threadgroup float Bs[BLOCK_SIZE][BLOCK_SIZE];
+        threadgroup float4 *As4 = (threadgroup float4 *)As;
+        threadgroup float4 *Bs4 = (threadgroup float4 *)Bs;
         thread float Cval = 0.0f;
         
-        for (uint idx = 0; idx < k / BLOCK_SIZE; ++idx) {
-            As[tid.y][tid.x] = A[(gidIn.y + tid.y) * k + idx * BLOCK_SIZE + tid.x];
-            Bs[tid.x][tid.y] = B[(idx * BLOCK_SIZE + tid.y) * n + gidIn.x + tid.x];
+        for (uint i = 0; i < k / BLOCK_SIZE; ++i) {
+            As[tid.y][tid.x] = A[(gidIn.y + tid.y) * k + i * BLOCK_SIZE + tid.x];
+            Bs[tid.y][tid.x] = B[(i * BLOCK_SIZE + tid.x) * n + gidIn.x + tid.y];
             threadgroup_barrier(mem_flags::mem_none);
 
-            for (uint e = 0; e < BLOCK_SIZE; ++e)
-                Cval += As[tid.y][e] * Bs[tid.x][e];
+            thread float4 tmp = As4[BLOCK_SIZE / 4 * tid.y] * Bs4[BLOCK_SIZE / 4 * tid.x] + As4[BLOCK_SIZE / 4 * tid.y + 1] * Bs4[BLOCK_SIZE / 4 * tid.x + 1];
+            Cval += (tmp.x + tmp.y + tmp.z + tmp.w);
             threadgroup_barrier(mem_flags::mem_none);
         }
         
-        C[(gidIn.y + tid.y) * n + gidIn.x + tid.x] = Cval;
+        const uint Cidx = (gidIn.y + tid.y) * n + gidIn.x + tid.x;
+        C[Cidx] = Cval * alpha + C[Cidx] * beta;
     }
 }

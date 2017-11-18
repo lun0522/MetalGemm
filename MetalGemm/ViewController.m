@@ -9,13 +9,13 @@
 #import <Accelerate/Accelerate.h>
 #import "MPSGemm.h"
 #import "MetalGemmNaive.h"
-#import "MetalGemmTunedV1.h"
+#import "MetalGemmTuned.h"
 #import "ViewController.h"
 
 @interface ViewController () {
     NSMutableArray *mpsTime;
     NSMutableArray *metalNaiveTime;
-    NSMutableArray *metalTunedV1Time;
+    NSMutableArray *metalTunedTime;
 }
 
 @end
@@ -28,7 +28,7 @@
     
     mpsTime = [[NSMutableArray alloc] init];
     metalNaiveTime = [[NSMutableArray alloc] init];
-    metalTunedV1Time = [[NSMutableArray alloc] init];
+    metalTunedTime = [[NSMutableArray alloc] init];
     
     for (int iter = 2; iter <= 75; iter++) {
         int m = iter * 16;
@@ -80,17 +80,17 @@
         float metalNaiveSum = 0.0;
         vDSP_sve(C, 1, &metalNaiveSum, m * n);
         
-        // Metal tuned v1
+        // Metal tuned
         memcpy(C, D, m * n * sizeof(float));
         startTime = [NSDate date];
-        metal_gemm_tuned_v1(transA, transB, m, n, k, alpha, A, B, beta, C);
-        [metalTunedV1Time addObject:@(-[startTime timeIntervalSinceNow]*1000)];
+        metal_gemm_tuned(transA, transB, m, n, k, alpha, A, B, beta, C);
+        [metalTunedTime addObject:@(-[startTime timeIntervalSinceNow]*1000)];
         
-        float metalTunedV1Sum = 0.0;
-        vDSP_sve(C, 1, &metalTunedV1Sum, m * n);
+        float metalTunedSum = 0.0;
+        vDSP_sve(C, 1, &metalTunedSum, m * n);
         
-        if (fabsf(mpsSum - metalTunedV1Sum) > 0.1) {
-            printf("Diff too large: %f\n", mpsSum - metalTunedV1Sum);
+        if (fabsf(mpsSum - metalTunedSum) > 0.1) {
+            printf("Diff too large: %f\n", mpsSum - metalTunedSum);
         }
         
         free(A);
@@ -111,8 +111,8 @@
     }
     printf("\n");
     
-    printf("Metal tuned v1:\n");
-    for (NSNumber *time in metalTunedV1Time) {
+    printf("Metal tuned:\n");
+    for (NSNumber *time in metalTunedTime) {
         printf("%.0f ", time.floatValue);
     }
     printf("\n");

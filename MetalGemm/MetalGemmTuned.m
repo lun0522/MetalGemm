@@ -1,5 +1,5 @@
 //
-//  MetalGemmTunedV1.m
+//  MetalGemmTuned.m
 //  MetalGemm
 //
 //  Created by Lun on 17/11/2017.
@@ -7,7 +7,7 @@
 //
 
 #import <Metal/Metal.h>
-#import "MetalGemmTunedV1.h"
+#import "MetalGemmTuned.h"
 
 typedef NS_ENUM (NSInteger,MetalMatrixBufferTypes) {
     eMTLMatBufferA = 0,
@@ -26,7 +26,7 @@ struct MetalMatrixDim {
 typedef struct MetalMatrixDim  MetalMatrixDim;
 typedef        MetalMatrixDim* MetalMatrixDimRef;
 
-@implementation MetalGemmTunedV1 {
+@implementation MetalGemmTuned {
     int _m;
     int _n;
     int _k;
@@ -51,9 +51,9 @@ typedef        MetalMatrixDim* MetalMatrixDimRef;
     dispatch_queue_t _dispatchQueue;
 }
 
-static MetalGemmTunedV1 *multiplicationHandler = nil;
+static MetalGemmTuned *multiplicationHandler = nil;
 
-+ (MetalGemmTunedV1 *)sharedInstance {
++ (MetalGemmTuned *)sharedInstance {
     @synchronized(self) {
         if (!multiplicationHandler)
             multiplicationHandler = [[self alloc] init];
@@ -87,6 +87,7 @@ static MetalGemmTunedV1 *multiplicationHandler = nil;
         
         _kernel = [_device newComputePipelineStateWithFunction:func error:nil];
         NSAssert(_kernel, @">> ERROR: Failed creating a compute pipeline state!");
+        NSLog(@"%lu", _kernel.threadExecutionWidth);
         
         _buffers = [[NSMutableArray alloc] initWithCapacity:eMTLMatBufferMax];
         NSAssert(_buffers, @">> ERROR: Failed creating a mutable array for Metal buffers!");
@@ -218,31 +219,31 @@ static MetalGemmTunedV1 *multiplicationHandler = nil;
     [_commandBuffer waitUntilCompleted];
 }
 
-void metal_gemm_tuned_v1(const bool transA,
-                         const bool transB,
-                         const int M,
-                         const int N,
-                         const int K,
-                         const float alpha,
-                         const float *A,
-                         const float *B,
-                         const float beta,
-                         float *C) {
+void metal_gemm_tuned(const bool transA,
+                      const bool transB,
+                      const int M,
+                      const int N,
+                      const int K,
+                      const float alpha,
+                      const float *A,
+                      const float *B,
+                      const float beta,
+                      float *C) {
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [[MetalGemmTunedV1 sharedInstance] _multiplyWithTransA:transA
-                                                        TransB:transB
-                                                             M:M
-                                                             N:N
-                                                             K:K
-                                                         alpha:alpha
-                                                             A:A
-                                                             B:B
-                                                          beta:beta
-                                                             C:C
-                                                    completion:^() {
-                                                        dispatch_semaphore_signal(semaphore);
-                                                    }];
+        [[MetalGemmTuned sharedInstance] _multiplyWithTransA:transA
+                                                      TransB:transB
+                                                           M:M
+                                                           N:N
+                                                           K:K
+                                                       alpha:alpha
+                                                           A:A
+                                                           B:B
+                                                        beta:beta
+                                                           C:C
+                                                  completion:^() {
+                                                      dispatch_semaphore_signal(semaphore);
+                                                  }];
     });
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }
