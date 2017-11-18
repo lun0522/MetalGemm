@@ -1,5 +1,5 @@
 //
-//  MetalGemmNaive.m
+//  MetalGemmTunedV1.m
 //  MetalGemm
 //
 //  Created by Lun on 17/11/2017.
@@ -7,7 +7,7 @@
 //
 
 #import <Metal/Metal.h>
-#import "MetalGemmNaive.h"
+#import "MetalGemmTunedV1.h"
 
 typedef NS_ENUM (NSInteger,MetalMatrixBufferTypes) {
     eMTLMatBufferA = 0,
@@ -26,7 +26,7 @@ struct MetalMatrixDim {
 typedef struct MetalMatrixDim  MetalMatrixDim;
 typedef        MetalMatrixDim* MetalMatrixDimRef;
 
-@implementation MetalGemmNaive {
+@implementation MetalGemmTunedV1 {
     int _m;
     int _n;
     int _k;
@@ -51,9 +51,9 @@ typedef        MetalMatrixDim* MetalMatrixDimRef;
     dispatch_queue_t _dispatchQueue;
 }
 
-static MetalGemmNaive *multiplicationHandler = nil;
+static MetalGemmTunedV1 *multiplicationHandler = nil;
 
-+ (MetalGemmNaive *)sharedInstance {
++ (MetalGemmTunedV1 *)sharedInstance {
     @synchronized(self) {
         if (!multiplicationHandler)
             multiplicationHandler = [[self alloc] init];
@@ -82,7 +82,7 @@ static MetalGemmNaive *multiplicationHandler = nil;
         id<MTLLibrary> library = [_device newDefaultLibrary];
         NSAssert(library, @">> ERROR: Failed creating a library!");
         
-        id<MTLFunction> func = [library newFunctionWithName:@"MetalGemmNaive"];
+        id<MTLFunction> func = [library newFunctionWithName:@"MetalGemmTunedV1"];
         NSAssert(func, @">> ERROR: Failed creating a named function!");
         
         _kernel = [_device newComputePipelineStateWithFunction:func error:nil];
@@ -203,19 +203,10 @@ static MetalGemmNaive *multiplicationHandler = nil;
 }
 
 - (void)_setThreadGroups {
-    _threadsPerGroup = MTLSizeMake(4, 8, 1);
-    
-    NSUInteger width  = _m % 8 ? (_m + 8) / 8 : _m / 8;
-    NSUInteger height = _n % 8 ? (_n + 8) / 8 : _n / 8;
-    _threadgroupsPerGrid = MTLSizeMake(
-                                       (width % _threadsPerGroup.width) ?
-                                       (width + _threadsPerGroup.width) / _threadsPerGroup.width :
-                                       width / _threadsPerGroup.width,
-                                       (height % _threadsPerGroup.height) ?
-                                       (height + _threadsPerGroup.height) / _threadsPerGroup.height :
-                                       height / _threadsPerGroup.height,
-                                       1
-                                       );
+    _threadsPerGroup = MTLSizeMake(8, 8, 1);
+    _threadgroupsPerGrid = MTLSizeMake(_m % 8 ? (_m + 8) / 8 : _m / 8,
+                                       _n % 8 ? (_n + 8) / 8 : _n / 8,
+                                       1);
     
     [_encoder dispatchThreadgroups:_threadgroupsPerGrid
              threadsPerThreadgroup:_threadsPerGroup];
@@ -227,31 +218,31 @@ static MetalGemmNaive *multiplicationHandler = nil;
     [_commandBuffer waitUntilCompleted];
 }
 
-void metal_gemm_naive(const bool transA,
-                      const bool transB,
-                      const int M,
-                      const int N,
-                      const int K,
-                      const float alpha,
-                      const float *A,
-                      const float *B,
-                      const float beta,
-                      float *C) {
+void metal_gemm_tuned_v1(const bool transA,
+                         const bool transB,
+                         const int M,
+                         const int N,
+                         const int K,
+                         const float alpha,
+                         const float *A,
+                         const float *B,
+                         const float beta,
+                         float *C) {
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [[MetalGemmNaive sharedInstance] _multiplyWithTransA:transA
-                                                      TransB:transB
-                                                           M:M
-                                                           N:N
-                                                           K:K
-                                                       alpha:alpha
-                                                           A:A
-                                                           B:B
-                                                        beta:beta
-                                                           C:C
-                                                  completion:^() {
-                                                      dispatch_semaphore_signal(semaphore);
-                                                  }];
+        [[MetalGemmTunedV1 sharedInstance] _multiplyWithTransA:transA
+                                                        TransB:transB
+                                                             M:M
+                                                             N:N
+                                                             K:K
+                                                         alpha:alpha
+                                                             A:A
+                                                             B:B
+                                                          beta:beta
+                                                             C:C
+                                                    completion:^() {
+                                                        dispatch_semaphore_signal(semaphore);
+                                                    }];
     });
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }

@@ -9,11 +9,13 @@
 #import <Accelerate/Accelerate.h>
 #import "MPSGemm.h"
 #import "MetalGemmNaive.h"
+#import "MetalGemmTunedV1.h"
 #import "ViewController.h"
 
 @interface ViewController () {
     NSMutableArray *mpsTime;
     NSMutableArray *metalNaiveTime;
+    NSMutableArray *metalTunedV1Time;
 }
 
 @end
@@ -26,9 +28,10 @@
     
     mpsTime = [[NSMutableArray alloc] init];
     metalNaiveTime = [[NSMutableArray alloc] init];
+    metalTunedV1Time = [[NSMutableArray alloc] init];
     
-    for (int iter = 1; iter <= 75; iter++) {
-        int m = iter * 20;
+    for (int iter = 2; iter <= 75; iter++) {
+        int m = iter * 16;
         int n = m;
         int k = m;
         float alpha = 1;
@@ -48,13 +51,13 @@
         for (int i = 0; i < m * k; i++) {
             A[i] = (float)arc4random() / UINT32_MAX - 0.5;
         }
-        
+
         for (int i = 0; i < k * n; i++) {
             B[i] = (float)arc4random() / UINT32_MAX - 0.5;
         }
-        
+
         for (int i = 0; i < m * n; i++) {
-            D[i] = (float)arc4random() / UINT32_MAX - 0.5;
+            D[i] = 0;
         }
         
         NSDate *startTime;
@@ -77,8 +80,17 @@
         float metalNaiveSum = 0.0;
         vDSP_sve(C, 1, &metalNaiveSum, m * n);
         
-        if (mpsSum - metalNaiveSum > 0.1) {
-            printf("Diff too large: %f", mpsSum - metalNaiveSum);
+        // Metal tuned v1
+        memcpy(C, D, m * n * sizeof(float));
+        startTime = [NSDate date];
+        metal_gemm_tuned_v1(transA, transB, m, n, k, alpha, A, B, beta, C);
+        [metalTunedV1Time addObject:@(-[startTime timeIntervalSinceNow]*1000)];
+        
+        float metalTunedV1Sum = 0.0;
+        vDSP_sve(C, 1, &metalTunedV1Sum, m * n);
+        
+        if (fabsf(mpsSum - metalTunedV1Sum) > 0.1) {
+            printf("Diff too large: %f\n", mpsSum - metalTunedV1Sum);
         }
         
         free(A);
@@ -95,6 +107,12 @@
     
     printf("Metal naive:\n");
     for (NSNumber *time in metalNaiveTime) {
+        printf("%.0f ", time.floatValue);
+    }
+    printf("\n");
+    
+    printf("Metal tuned v1:\n");
+    for (NSNumber *time in metalTunedV1Time) {
         printf("%.0f ", time.floatValue);
     }
     printf("\n");
