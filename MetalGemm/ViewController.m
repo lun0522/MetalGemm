@@ -8,8 +8,7 @@
 
 #import <Accelerate/Accelerate.h>
 #import "MPSGemm.h"
-#import "MetalGemmNaive.h"
-#import "MetalGemmTuned.h"
+#import "MetalGemm.h"
 #import "ViewController.h"
 
 @interface ViewController () {
@@ -26,11 +25,23 @@
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
     
+    MetalGemm *metalGemmNaive = [[MetalGemm alloc] initWithKernel:@"MetalGemmNaive"
+                                                 threadgroupWidth:4
+                                                threadgroupHeight:8
+                                          threadgroupCoveredWidth:4 * 8
+                                         threadgroupCoveredHeight:8 * 8];
+    
+    MetalGemm *metalGemmTunedV2 = [[MetalGemm alloc] initWithKernel:@"MetalGemmTunedV2"
+                                                   threadgroupWidth:4
+                                                  threadgroupHeight:8
+                                            threadgroupCoveredWidth:16
+                                           threadgroupCoveredHeight:8];
+    
     mpsTime = [[NSMutableArray alloc] init];
     metalNaiveTime = [[NSMutableArray alloc] init];
     metalTunedTime = [[NSMutableArray alloc] init];
     
-    for (int iter = 2; iter <= 75; iter++) {
+    for (int iter = 1; iter <= 75; iter++) {
         int m = iter * 16;
         int n = m;
         int k = m;
@@ -74,7 +85,7 @@
         // Metal naive
         memcpy(C, D, m * n * sizeof(float));
         startTime = [NSDate date];
-        metal_gemm_naive(transA, transB, m, n, k, alpha, A, B, beta, C);
+        [metalGemmNaive gemmWithTransA:transA TransB:transB M:m N:n K:k alpha:alpha A:A B:B beta:beta C:C];
         [metalNaiveTime addObject:@(-[startTime timeIntervalSinceNow]*1000)];
         
         float metalNaiveSum = 0.0;
@@ -83,14 +94,14 @@
         // Metal tuned
         memcpy(C, D, m * n * sizeof(float));
         startTime = [NSDate date];
-        metal_gemm_tuned(transA, transB, m, n, k, alpha, A, B, beta, C);
+        [metalGemmTunedV2 gemmWithTransA:transA TransB:transB M:m N:n K:k alpha:alpha A:A B:B beta:beta C:C];
         [metalTunedTime addObject:@(-[startTime timeIntervalSinceNow]*1000)];
         
         float metalTunedSum = 0.0;
         vDSP_sve(C, 1, &metalTunedSum, m * n);
         
-        if (fabsf(mpsSum - metalTunedSum) > 0.1) {
-            printf("Diff too large: %f\n", mpsSum - metalTunedSum);
+        if (fabsf(mpsSum - metalNaiveSum) > 0.1 || fabsf(mpsSum - metalTunedSum) > 0.1) {
+            printf("Diff too large: %f %f\n", mpsSum - metalNaiveSum, mpsSum - metalTunedSum);
         }
         
         free(A);

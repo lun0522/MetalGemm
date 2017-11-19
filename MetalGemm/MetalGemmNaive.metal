@@ -17,8 +17,8 @@ kernel void MetalGemmNaive(const device float        *A   [[ buffer(0) ]],
     const ushort n = dims.n;
     const ushort k = dims.k;
     
-    const ushort rmd_a = dims.rmd_a;
-    const ushort rmd_b = dims.rmd_b;
+    const ushort rmd_a = dims.rmd_a % 8;
+    const ushort rmd_b = dims.rmd_b % 8;
     
     const bool trans_a = dims.trans_a;
     const bool trans_b = dims.trans_b;

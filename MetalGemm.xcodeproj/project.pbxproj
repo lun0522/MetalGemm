@@ -17,9 +17,8 @@
 		BDAAE4A51FBFD44000DFC414 /* MPSGemm.m in Sources */ = {isa = PBXBuildFile; fileRef = BDAAE49E1FBFD44000DFC414 /* MPSGemm.m */; };
 		BDAAE4A61FBFD44000DFC414 /* MetalGemmNaive.metal in Sources */ = {isa = PBXBuildFile; fileRef = BDAAE4A01FBFD44000DFC414 /* MetalGemmNaive.metal */; };
 		BDAAE4A71FBFD44000DFC414 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BDAAE4A31FBFD44000DFC414 /* ViewController.m */; };
-		BDAAE4A81FBFD44000DFC414 /* MetalGemmNaive.m in Sources */ = {isa = PBXBuildFile; fileRef = BDAAE4A41FBFD44000DFC414 /* MetalGemmNaive.m */; };
 		BDAE9A5B1FBFD5F500F7C157 /* MetalGemmTuned.metal in Sources */ = {isa = PBXBuildFile; fileRef = BDAE9A5A1FBFD5F500F7C157 /* MetalGemmTuned.metal */; };
-		BDAE9A5E1FBFE82E00F7C157 /* MetalGemmTuned.m in Sources */ = {isa = PBXBuildFile; fileRef = BDAE9A5D1FBFE82E00F7C157 /* MetalGemmTuned.m */; };
+		BDAE9A5E1FBFE82E00F7C157 /* MetalGemm.m in Sources */ = {isa = PBXBuildFile; fileRef = BDAE9A5D1FBFE82E00F7C157 /* MetalGemm.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,13 +56,11 @@
 		BDAAE49E1FBFD44000DFC414 /* MPSGemm.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MPSGemm.m; sourceTree = "<group>"; };
 		BDAAE49F1FBFD44000DFC414 /* MPSGemm.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MPSGemm.h; sourceTree = "<group>"; };
 		BDAAE4A01FBFD44000DFC414 /* MetalGemmNaive.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = MetalGemmNaive.metal; sourceTree = "<group>"; };
-		BDAAE4A11FBFD44000DFC414 /* MetalGemmNaive.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MetalGemmNaive.h; sourceTree = "<group>"; };
 		BDAAE4A21FBFD44000DFC414 /* ViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ViewController.h; sourceTree = "<group>"; };
 		BDAAE4A31FBFD44000DFC414 /* ViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ViewController.m; sourceTree = "<group>"; };
-		BDAAE4A41FBFD44000DFC414 /* MetalGemmNaive.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MetalGemmNaive.m; sourceTree = "<group>"; };
 		BDAE9A5A1FBFD5F500F7C157 /* MetalGemmTuned.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = MetalGemmTuned.metal; sourceTree = "<group>"; };
-		BDAE9A5C1FBFE82E00F7C157 /* MetalGemmTuned.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MetalGemmTuned.h; sourceTree = "<group>"; };
-		BDAE9A5D1FBFE82E00F7C157 /* MetalGemmTuned.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MetalGemmTuned.m; sourceTree = "<group>"; };
+		BDAE9A5C1FBFE82E00F7C157 /* MetalGemm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MetalGemm.h; sourceTree = "<group>"; };
+		BDAE9A5D1FBFE82E00F7C157 /* MetalGemm.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MetalGemm.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,11 +115,9 @@
 				BDAAE46D1FBFD41A00DFC414 /* AppDelegate.m */,
 				BDAAE4A21FBFD44000DFC414 /* ViewController.h */,
 				BDAAE4A31FBFD44000DFC414 /* ViewController.m */,
-				BDAAE4A11FBFD44000DFC414 /* MetalGemmNaive.h */,
-				BDAAE4A41FBFD44000DFC414 /* MetalGemmNaive.m */,
+				BDAE9A5C1FBFE82E00F7C157 /* MetalGemm.h */,
+				BDAE9A5D1FBFE82E00F7C157 /* MetalGemm.m */,
 				BDAAE4A01FBFD44000DFC414 /* MetalGemmNaive.metal */,
-				BDAE9A5C1FBFE82E00F7C157 /* MetalGemmTuned.h */,
-				BDAE9A5D1FBFE82E00F7C157 /* MetalGemmTuned.m */,
 				BDAE9A5A1FBFD5F500F7C157 /* MetalGemmTuned.metal */,
 				BDAAE49F1FBFD44000DFC414 /* MPSGemm.h */,
 				BDAAE49E1FBFD44000DFC414 /* MPSGemm.m */,
@@ -291,9 +286,8 @@
 				BDAAE4A61FBFD44000DFC414 /* MetalGemmNaive.metal in Sources */,
 				BDAAE4A51FBFD44000DFC414 /* MPSGemm.m in Sources */,
 				BDAAE46E1FBFD41A00DFC414 /* AppDelegate.m in Sources */,
-				BDAE9A5E1FBFE82E00F7C157 /* MetalGemmTuned.m in Sources */,
+				BDAE9A5E1FBFE82E00F7C157 /* MetalGemm.m in Sources */,
 				BDAAE4A71FBFD44000DFC414 /* ViewController.m in Sources */,
-				BDAAE4A81FBFD44000DFC414 /* MetalGemmNaive.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,5 +1,5 @@
 //
-//  MetalGemmNaive.m
+//  MetalGemm.m
 //  MetalGemm
 //
 //  Created by Lun on 17/11/2017.
@@ -7,7 +7,7 @@
 //
 
 #import <Metal/Metal.h>
-#import "MetalGemmNaive.h"
+#import "MetalGemm.h"
 
 typedef NS_ENUM (NSInteger,MetalMatrixBufferTypes) {
     eMTLMatBufferA = 0,
@@ -26,7 +26,7 @@ struct MetalMatrixDim {
 typedef struct MetalMatrixDim  MetalMatrixDim;
 typedef        MetalMatrixDim* MetalMatrixDimRef;
 
-@implementation MetalGemmNaive {
+@implementation MetalGemm {
     int _m;
     int _n;
     int _k;
@@ -47,31 +47,17 @@ typedef        MetalMatrixDim* MetalMatrixDimRef;
     NSMutableArray<id<MTLBuffer>> *_buffers;
     MTLSize _threadsPerGroup;
     MTLSize _threadgroupsPerGrid;
+    NSUInteger _threadgroupCoveredWidth;
+    NSUInteger _threadgroupCoveredHeight;
     dispatch_group_t _dispatchGroup;
     dispatch_queue_t _dispatchQueue;
 }
 
-static MetalGemmNaive *multiplicationHandler = nil;
-
-+ (MetalGemmNaive *)sharedInstance {
-    @synchronized(self) {
-        if (!multiplicationHandler)
-            multiplicationHandler = [[self alloc] init];
-    }
-    return multiplicationHandler;
-}
-
-+ (id)allocWithZone:(NSZone *)zone {
-    @synchronized(self) {
-        if (!multiplicationHandler) {
-            multiplicationHandler = [super allocWithZone:zone];
-            return multiplicationHandler;
-        }
-    }
-    return nil;
-}
-
-- (id)init {
+- (instancetype)initWithKernel:(NSString *)kernelName
+              threadgroupWidth:(NSUInteger)threadgroupWidth
+             threadgroupHeight:(NSUInteger)threadgroupHeight
+       threadgroupCoveredWidth:(NSUInteger)threadgroupCoveredWidth
+      threadgroupCoveredHeight:(NSUInteger)threadgroupCoveredHeight {
     if (self = [super init]) {
         _device = MTLCreateSystemDefaultDevice();
         NSAssert(_device, @">> ERROR: Failed creating a system default device!");
@@ -82,7 +68,7 @@ static MetalGemmNaive *multiplicationHandler = nil;
         id<MTLLibrary> library = [_device newDefaultLibrary];
         NSAssert(library, @">> ERROR: Failed creating a library!");
         
-        id<MTLFunction> func = [library newFunctionWithName:@"MetalGemmNaive"];
+        id<MTLFunction> func = [library newFunctionWithName:kernelName];
         NSAssert(func, @">> ERROR: Failed creating a named function!");
         
         _kernel = [_device newComputePipelineStateWithFunction:func error:nil];
@@ -94,23 +80,26 @@ static MetalGemmNaive *multiplicationHandler = nil;
         _dispatchGroup = dispatch_group_create();
         NSAssert(_dispatchGroup, @">> ERROR: Failed creating a dispatch group!");
         
-        _dispatchQueue = dispatch_queue_create("com.lun.metalgemm.naive", DISPATCH_QUEUE_SERIAL);
+        _dispatchQueue = dispatch_queue_create("com.lun.metalgemm", DISPATCH_QUEUE_SERIAL);
         NSAssert(_dispatchQueue, @">> ERROR: Failed creating a dispatch queue!");
+        
+        _threadsPerGroup = MTLSizeMake(threadgroupWidth, threadgroupHeight, 1);
+        _threadgroupCoveredWidth  = threadgroupCoveredWidth;
+        _threadgroupCoveredHeight = threadgroupCoveredHeight;
     }
     return self;
 }
 
-- (void)_multiplyWithTransA:(const bool)transA
-                     TransB:(const bool)transB
-                          M:(const int)M
-                          N:(const int)N
-                          K:(const int)K
-                      alpha:(const float)alpha
-                          A:(const float *)A
-                          B:(const float *)B
-                       beta:(const float)beta
-                          C:(float *)C
-                 completion:(void (^)(void))completion {
+- (void)gemmWithTransA:(const bool)transA
+                TransB:(const bool)transB
+                     M:(const int)M
+                     N:(const int)N
+                     K:(const int)K
+                 alpha:(const float)alpha
+                     A:(const float *)A
+                     B:(const float *)B
+                  beta:(const float)beta
+                     C:(float *)C {
     @synchronized(self) {
         _m = M;
         _n = N;
@@ -135,8 +124,6 @@ static MetalGemmNaive *multiplicationHandler = nil;
         [self _encodeBuffers];
         [self _setThreadGroups];
         [self _compute];
-        
-        completion();
     }
 }
 
@@ -179,8 +166,8 @@ static MetalGemmNaive *multiplicationHandler = nil;
     matrixDim->n = _n;
     matrixDim->k = _k;
     
-    matrixDim->rmd_a = _m % 8;
-    matrixDim->rmd_b = _n % 8;
+    matrixDim->rmd_a = _m % _threadgroupCoveredHeight;
+    matrixDim->rmd_b = _n % _threadgroupCoveredWidth;
     
     matrixDim->trans_a = _transA;
     matrixDim->trans_b = _transB;
@@ -203,19 +190,13 @@ static MetalGemmNaive *multiplicationHandler = nil;
 }
 
 - (void)_setThreadGroups {
-    _threadsPerGroup = MTLSizeMake(4, 8, 1);
-    
-    NSUInteger width  = _m % 8 ? (_m + 8) / 8 : _m / 8;
-    NSUInteger height = _n % 8 ? (_n + 8) / 8 : _n / 8;
-    _threadgroupsPerGrid = MTLSizeMake(
-                                       (width % _threadsPerGroup.width) ?
-                                       (width + _threadsPerGroup.width) / _threadsPerGroup.width :
-                                       width / _threadsPerGroup.width,
-                                       (height % _threadsPerGroup.height) ?
-                                       (height + _threadsPerGroup.height) / _threadsPerGroup.height :
-                                       height / _threadsPerGroup.height,
-                                       1
-                                       );
+    _threadgroupsPerGrid = MTLSizeMake(_n % _threadgroupCoveredWidth ?
+                                       (_n + _threadgroupCoveredWidth) / _threadgroupCoveredWidth :
+                                       _n / _threadgroupCoveredWidth,
+                                       _m % _threadgroupCoveredHeight ?
+                                       (_m + _threadgroupCoveredHeight) / _threadgroupCoveredHeight :
+                                       _m / _threadgroupCoveredHeight,
+                                       1);
     
     [_encoder dispatchThreadgroups:_threadgroupsPerGrid
              threadsPerThreadgroup:_threadsPerGroup];
@@ -225,35 +206,6 @@ static MetalGemmNaive *multiplicationHandler = nil;
     [_encoder endEncoding];
     [_commandBuffer commit];
     [_commandBuffer waitUntilCompleted];
-}
-
-void metal_gemm_naive(const bool transA,
-                      const bool transB,
-                      const int M,
-                      const int N,
-                      const int K,
-                      const float alpha,
-                      const float *A,
-                      const float *B,
-                      const float beta,
-                      float *C) {
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [[MetalGemmNaive sharedInstance] _multiplyWithTransA:transA
-                                                      TransB:transB
-                                                           M:M
-                                                           N:N
-                                                           K:K
-                                                       alpha:alpha
-                                                           A:A
-                                                           B:B
-                                                        beta:beta
-                                                           C:C
-                                                  completion:^() {
-                                                      dispatch_semaphore_signal(semaphore);
-                                                  }];
-    });
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }
 
 @end
