@@ -15,14 +15,15 @@ typedef struct {
     float alpha, beta;
 } MetalMatrixDim;
 
-#define BLOCK_SIZE_V1 8
+#define BLOCK_SIZE_V1 16
 
-kernel void MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
-                             const device float        *B   [[ buffer(1) ]],
-                             device float              *C   [[ buffer(2) ]],
-                             constant MetalMatrixDim&  dims [[ buffer(3) ]],
-                             uint2                     gid  [[ threadgroup_position_in_grid ]],
-                             uint2                     tid  [[ thread_position_in_threadgroup ]]) {
+kernel void
+MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
+                 const device float        *B   [[ buffer(1) ]],
+                 device float              *C   [[ buffer(2) ]],
+                 constant MetalMatrixDim&  dims [[ buffer(3) ]],
+                 uint2                     gid  [[ threadgroup_position_in_grid ]],
+                 uint2                     tid  [[ thread_position_in_threadgroup ]]) {
     const uint m = dims.m;
     const uint n = dims.n;
     const uint k = dims.k;
@@ -36,16 +37,18 @@ kernel void MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
         threadgroup float Bs[BLOCK_SIZE_V1][BLOCK_SIZE_V1];
         threadgroup float4 *As4 = (threadgroup float4 *)As;
         threadgroup float4 *Bs4 = (threadgroup float4 *)Bs;
-        thread float Cval = 0.0f;
+        float Cval = 0.0f;
         
-        for (uint i = 0; i < k / BLOCK_SIZE_V1; ++i) {
+        for (uchar i = 0; i < k / BLOCK_SIZE_V1; ++i) {
             As[tid.y][tid.x] = A[(gidIn.y + tid.y) * k + i * BLOCK_SIZE_V1 + tid.x];
             Bs[tid.y][tid.x] = B[(i * BLOCK_SIZE_V1 + tid.x) * n + gidIn.x + tid.y];
-            threadgroup_barrier(mem_flags::mem_none);
+            threadgroup_barrier(mem_flags::mem_threadgroup);
 
-            thread float4 tmp = As4[BLOCK_SIZE_V1 / 4 * tid.y] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x] + As4[BLOCK_SIZE_V1 / 4 * tid.y + 1] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + 1];
-            Cval += (tmp.x + tmp.y + tmp.z + tmp.w);
-            threadgroup_barrier(mem_flags::mem_none);
+            float4 tmp = float4(0.0f);
+            for (uchar e = 0; e < BLOCK_SIZE_V1 / 4; ++e)
+                tmp += As4[BLOCK_SIZE_V1 / 4 * tid.y + e] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + e];
+            Cval += tmp.x + tmp.y + tmp.z + tmp.w;
+            threadgroup_barrier(mem_flags::mem_threadgroup);
         }
         
         const uint Cidx = (gidIn.y + tid.y) * n + gidIn.x + tid.x;
@@ -53,39 +56,85 @@ kernel void MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
     }
 }
 
-#define BLOCK_SIZE_V2_X 16
-#define BLOCK_SIZE_V2_Y 8
-#define BLOCK_SIZE_V2_K 16
+#define BLOCK_SIZE_V2 16
 
-kernel void MetalGemmTunedV2(const device float        *A   [[ buffer(0) ]],
-                             const device float        *B   [[ buffer(1) ]],
-                             device float              *C   [[ buffer(2) ]],
-                             constant MetalMatrixDim&  dims [[ buffer(3) ]],
-                             uint2                     gid  [[ threadgroup_position_in_grid ]],
-                             uint2                     tid  [[ thread_position_in_threadgroup ]]) {
+kernel void
+MetalGemmTunedV2(const device float        *A   [[ buffer(0) ]],
+                 const device float        *B   [[ buffer(1) ]],
+                 device float              *C   [[ buffer(2) ]],
+                 constant MetalMatrixDim&  dims [[ buffer(3) ]],
+                 uint2                     gid  [[ threadgroup_position_in_grid ]],
+                 uint2                     tid  [[ thread_position_in_threadgroup ]]) {
     const uint m = dims.m;
     const uint n = dims.n;
     const uint k = dims.k;
     const float alpha = dims.alpha;
     const float beta  = dims.beta;
-    const uint2 gidIn = uint2(gid.x * BLOCK_SIZE_V2_X, gid.y * BLOCK_SIZE_V2_Y);
+    const uint2 gidIn = gid * BLOCK_SIZE_V2;
     
-    if (n - gidIn.x < BLOCK_SIZE_V1 || m - gidIn.y < BLOCK_SIZE_V1) return;
+    if (n - gidIn.x < BLOCK_SIZE_V2 || m - gidIn.y < BLOCK_SIZE_V2) return;
     else {
-        threadgroup float4 As4[BLOCK_SIZE_V2_Y][BLOCK_SIZE_V2_K / 4];
-        threadgroup float4 Bs4[BLOCK_SIZE_V2_K / 4][BLOCK_SIZE_V2_X];
+        threadgroup float4 As4[BLOCK_SIZE_V2][BLOCK_SIZE_V2 / 4];
+        threadgroup float4 Bs4[BLOCK_SIZE_V2 / 4][BLOCK_SIZE_V2];
         threadgroup float *As = (threadgroup float *)As4;
-        thread float4 Cval = float4(0.0f);
+        float4 Cval = float4(0.0f);
         
-        for (uint i = 0; i < k / BLOCK_SIZE_V2_K; ++i) {
-            As4[tid.y][tid.x] = *((const device float4 *)(A + (gidIn.y + tid.y) * k + i * BLOCK_SIZE_V2_K + tid.x * 4));
-            Bs4[tid.x][tid.y * 2] = *((const device float4 *)(B + (i * BLOCK_SIZE_V2_K + tid.y * 2) * n + gidIn.x + tid.x * 4));
-            Bs4[tid.x][tid.y * 2 + 1] = *((const device float4 *)(B + (i * BLOCK_SIZE_V2_K + tid.y * 2 + 1) * n + gidIn.x + tid.x * 4));
-            threadgroup_barrier(mem_flags::mem_none);
+        for (uchar i = 0; i < k / BLOCK_SIZE_V2; ++i) {
+            As4[tid.y][tid.x] = *((const device float4 *)(A + (gidIn.y + tid.y) * k + BLOCK_SIZE_V2 * i + tid.x * 4));
+            Bs4[tid.x][tid.y] = *((const device float4 *)(B + (BLOCK_SIZE_V2 * i + tid.y) * n + gidIn.x + tid.x * 4));
+            threadgroup_barrier(mem_flags::mem_threadgroup);
             
-            for (uint e = 0; e < BLOCK_SIZE_V2_K; ++e)
-                Cval += (*(As + BLOCK_SIZE_V2_K * tid.y + e) * Bs4[tid.x][e]);
-            threadgroup_barrier(mem_flags::mem_none);
+            for (uchar e = 0; e < BLOCK_SIZE_V2; ++e)
+                Cval += *(As + BLOCK_SIZE_V2 * tid.y + e) * Bs4[tid.x][e];
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+        }
+        
+        device float4 *c = (device float4 *)(C + (gidIn.y + tid.y) * n + gidIn.x + tid.x * 4);
+        *c = Cval * alpha + *c * beta;
+    }
+}
+
+#define BLOCK_SIZE_V3 16
+
+kernel void
+MetalGemmTunedV3(const device float        *A   [[ buffer(0) ]],
+                 const device float        *B   [[ buffer(1) ]],
+                 device float              *C   [[ buffer(2) ]],
+                 constant MetalMatrixDim&  dims [[ buffer(3) ]],
+                 uint2                     gid  [[ threadgroup_position_in_grid ]],
+                 uint2                     tid  [[ thread_position_in_threadgroup ]]) {
+    const uint m = dims.m;
+    const uint n = dims.n;
+    const uint k = dims.k;
+    const float alpha = dims.alpha;
+    const float beta  = dims.beta;
+    const uint2 gidIn = gid * BLOCK_SIZE_V3;
+    
+    if (n - gidIn.x < BLOCK_SIZE_V3 || m - gidIn.y < BLOCK_SIZE_V3) return;
+    else {
+        threadgroup float4 As4[BLOCK_SIZE_V3][BLOCK_SIZE_V3 / 4];
+        threadgroup float4 Bs4[BLOCK_SIZE_V3][BLOCK_SIZE_V3 / 4];
+        float4 Cval = float4(0.0f);
+        
+        for (uchar i = 0; i < k / BLOCK_SIZE_V3; ++i) {
+            As4[tid.y][tid.x] = *((const device float4 *)(A + (gidIn.y + tid.y) * k + BLOCK_SIZE_V3 * i + tid.x * 4));
+            const device float *b = B + (BLOCK_SIZE_V3 * i + tid.x * 4) * n + gidIn.x + tid.y;
+            Bs4[tid.y][tid.x] = float4(*(b + n * 0),
+                                       *(b + n * 1),
+                                       *(b + n * 2),
+                                       *(b + n * 3));
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+            
+            float4x4 tmp = float4x4(0.0f);
+            for (uchar e = 0; e < BLOCK_SIZE_V3 / 4; ++e) {
+                tmp[0] += As4[tid.y][e] * Bs4[tid.x * 4 + 0][e];
+                tmp[1] += As4[tid.y][e] * Bs4[tid.x * 4 + 1][e];
+                tmp[2] += As4[tid.y][e] * Bs4[tid.x * 4 + 2][e];
+                tmp[3] += As4[tid.y][e] * Bs4[tid.x * 4 + 3][e];
+            }
+            tmp = transpose(tmp);
+            Cval += tmp[0] + tmp[1] + tmp[2] + tmp[3];
+            threadgroup_barrier(mem_flags::mem_threadgroup);
         }
         
         device float4 *c = (device float4 *)(C + (gidIn.y + tid.y) * n + gidIn.x + tid.x * 4);

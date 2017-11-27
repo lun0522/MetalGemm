@@ -31,11 +31,14 @@
                                           threadgroupCoveredWidth:4 * 8
                                          threadgroupCoveredHeight:8 * 8];
     
-    MetalGemm *metalGemmTunedV2 = [[MetalGemm alloc] initWithKernel:@"MetalGemmTunedV2"
+    // tuned v1: 16 16 16 16
+    // tuned v2:  4 16 16 16
+    // tuned v3:  4 16 16 16
+    MetalGemm *metalGemmTunedV2 = [[MetalGemm alloc] initWithKernel:@"MetalGemmTunedV3"
                                                    threadgroupWidth:4
-                                                  threadgroupHeight:8
+                                                  threadgroupHeight:16
                                             threadgroupCoveredWidth:16
-                                           threadgroupCoveredHeight:8];
+                                           threadgroupCoveredHeight:16];
     
     mpsTime = [[NSMutableArray alloc] init];
     metalNaiveTime = [[NSMutableArray alloc] init];
@@ -45,8 +48,8 @@
         int m = iter * 16;
         int n = m;
         int k = m;
-        float alpha = 1;
-        float beta = 1;
+        float alpha = (float)arc4random() / UINT32_MAX - 0.5;
+        float beta = (float)arc4random() / UINT32_MAX - 0.5;
         bool transA = 0;
         bool transB = 0;
         
@@ -68,7 +71,7 @@
         }
 
         for (int i = 0; i < m * n; i++) {
-            D[i] = 0;
+            D[i] = (float)arc4random() / UINT32_MAX - 0.5;
         }
         
         NSDate *startTime;
@@ -100,7 +103,9 @@
         float metalTunedSum = 0.0;
         vDSP_sve(C, 1, &metalTunedSum, m * n);
         
-        if (fabsf(mpsSum - metalNaiveSum) > 0.1 || fabsf(mpsSum - metalTunedSum) > 0.1) {
+        if (isnan(metalNaiveSum) || isnan(metalTunedSum)) {
+            printf("Not a number: %f %f\n", metalNaiveSum, metalTunedSum);
+        } else if (fabsf(mpsSum - metalNaiveSum) > 0.1 || fabsf(mpsSum - metalTunedSum) > 0.1) {
             printf("Diff too large: %f %f\n", mpsSum - metalNaiveSum, mpsSum - metalTunedSum);
         }
         
