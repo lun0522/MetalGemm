@@ -44,9 +44,10 @@ MetalGemmTunedV1(const device float        *A   [[ buffer(0) ]],
             Bs[tid.y][tid.x] = B[(i * BLOCK_SIZE_V1 + tid.x) * n + gidIn.x + tid.y];
             threadgroup_barrier(mem_flags::mem_threadgroup);
 
-            float4 tmp = float4(0.0f);
-            for (uchar e = 0; e < BLOCK_SIZE_V1 / 4; ++e)
-                tmp += As4[BLOCK_SIZE_V1 / 4 * tid.y + e] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + e];
+            float4 tmp = (As4[BLOCK_SIZE_V1 / 4 * tid.y + 0] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + 0] +
+                          As4[BLOCK_SIZE_V1 / 4 * tid.y + 1] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + 1] +
+                          As4[BLOCK_SIZE_V1 / 4 * tid.y + 2] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + 2] +
+                          As4[BLOCK_SIZE_V1 / 4 * tid.y + 3] * Bs4[BLOCK_SIZE_V1 / 4 * tid.x + 3]);
             Cval += tmp.x + tmp.y + tmp.z + tmp.w;
             threadgroup_barrier(mem_flags::mem_threadgroup);
         }
@@ -84,8 +85,22 @@ MetalGemmTunedV2(const device float        *A   [[ buffer(0) ]],
             Bs4[tid.x][tid.y] = *((const device float4 *)(B + (BLOCK_SIZE_V2 * i + tid.y) * n + gidIn.x + tid.x * 4));
             threadgroup_barrier(mem_flags::mem_threadgroup);
             
-            for (uchar e = 0; e < BLOCK_SIZE_V2; ++e)
-                Cval += *(As + BLOCK_SIZE_V2 * tid.y + e) * Bs4[tid.x][e];
+            Cval += (*(As + BLOCK_SIZE_V2 * tid.y + 0) * Bs4[tid.x][0] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 1) * Bs4[tid.x][1] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 2) * Bs4[tid.x][2] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 3) * Bs4[tid.x][3] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 4) * Bs4[tid.x][4] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 5) * Bs4[tid.x][5] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 6) * Bs4[tid.x][6] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 7) * Bs4[tid.x][7] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 8) * Bs4[tid.x][8] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 9) * Bs4[tid.x][9] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 10) * Bs4[tid.x][10] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 11) * Bs4[tid.x][11] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 12) * Bs4[tid.x][12] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 13) * Bs4[tid.x][13] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 14) * Bs4[tid.x][14] +
+                     *(As + BLOCK_SIZE_V2 * tid.y + 15) * Bs4[tid.x][15]);
             threadgroup_barrier(mem_flags::mem_threadgroup);
         }
         
@@ -125,12 +140,22 @@ MetalGemmTunedV3(const device float        *A   [[ buffer(0) ]],
                                                            *(b + n * 3));
             threadgroup_barrier(mem_flags::mem_threadgroup);
             
-            for (uchar e = 0; e < BLOCK_SIZE_V3 / 4; ++e) {
-                Cval[0] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 0];
-                Cval[1] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 1];
-                Cval[2] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 2];
-                Cval[3] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 3];
-            }
+            Cval[0] += As4[tid.y][0] * Bs4[tid.x][0 * 4 + 0];
+            Cval[1] += As4[tid.y][0] * Bs4[tid.x][0 * 4 + 1];
+            Cval[2] += As4[tid.y][0] * Bs4[tid.x][0 * 4 + 2];
+            Cval[3] += As4[tid.y][0] * Bs4[tid.x][0 * 4 + 3];
+            Cval[0] += As4[tid.y][1] * Bs4[tid.x][1 * 4 + 0];
+            Cval[1] += As4[tid.y][1] * Bs4[tid.x][1 * 4 + 1];
+            Cval[2] += As4[tid.y][1] * Bs4[tid.x][1 * 4 + 2];
+            Cval[3] += As4[tid.y][1] * Bs4[tid.x][1 * 4 + 3];
+            Cval[0] += As4[tid.y][2] * Bs4[tid.x][2 * 4 + 0];
+            Cval[1] += As4[tid.y][2] * Bs4[tid.x][2 * 4 + 1];
+            Cval[2] += As4[tid.y][2] * Bs4[tid.x][2 * 4 + 2];
+            Cval[3] += As4[tid.y][2] * Bs4[tid.x][2 * 4 + 3];
+            Cval[0] += As4[tid.y][3] * Bs4[tid.x][3 * 4 + 0];
+            Cval[1] += As4[tid.y][3] * Bs4[tid.x][3 * 4 + 1];
+            Cval[2] += As4[tid.y][3] * Bs4[tid.x][3 * 4 + 2];
+            Cval[3] += As4[tid.y][3] * Bs4[tid.x][3 * 4 + 3];
             threadgroup_barrier(mem_flags::mem_threadgroup);
         }
         Cval = transpose(Cval);
