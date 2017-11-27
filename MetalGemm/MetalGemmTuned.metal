@@ -113,31 +113,29 @@ MetalGemmTunedV3(const device float        *A   [[ buffer(0) ]],
     if (n - gidIn.x < BLOCK_SIZE_V3 || m - gidIn.y < BLOCK_SIZE_V3) return;
     else {
         threadgroup float4 As4[BLOCK_SIZE_V3][BLOCK_SIZE_V3 / 4];
-        threadgroup float4 Bs4[BLOCK_SIZE_V3][BLOCK_SIZE_V3 / 4];
-        float4 Cval = float4(0.0f);
+        threadgroup float4 Bs4[BLOCK_SIZE_V3 / 4][BLOCK_SIZE_V3];
+        float4x4 Cval = float4x4(0.0f);
         
         for (uchar i = 0; i < k / BLOCK_SIZE_V3; ++i) {
             As4[tid.y][tid.x] = *((const device float4 *)(A + (gidIn.y + tid.y) * k + BLOCK_SIZE_V3 * i + tid.x * 4));
             const device float *b = B + (BLOCK_SIZE_V3 * i + tid.x * 4) * n + gidIn.x + tid.y;
-            Bs4[tid.y][tid.x] = float4(*(b + n * 0),
-                                       *(b + n * 1),
-                                       *(b + n * 2),
-                                       *(b + n * 3));
+            Bs4[tid.y / 4][tid.x * 4 + tid.y % 4] = float4(*(b + n * 0),
+                                                           *(b + n * 1),
+                                                           *(b + n * 2),
+                                                           *(b + n * 3));
             threadgroup_barrier(mem_flags::mem_threadgroup);
             
-            float4x4 tmp = float4x4(0.0f);
             for (uchar e = 0; e < BLOCK_SIZE_V3 / 4; ++e) {
-                tmp[0] += As4[tid.y][e] * Bs4[tid.x * 4 + 0][e];
-                tmp[1] += As4[tid.y][e] * Bs4[tid.x * 4 + 1][e];
-                tmp[2] += As4[tid.y][e] * Bs4[tid.x * 4 + 2][e];
-                tmp[3] += As4[tid.y][e] * Bs4[tid.x * 4 + 3][e];
+                Cval[0] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 0];
+                Cval[1] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 1];
+                Cval[2] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 2];
+                Cval[3] += As4[tid.y][e] * Bs4[tid.x][e * 4 + 3];
             }
-            tmp = transpose(tmp);
-            Cval += tmp[0] + tmp[1] + tmp[2] + tmp[3];
             threadgroup_barrier(mem_flags::mem_threadgroup);
         }
+        Cval = transpose(Cval);
         
         device float4 *c = (device float4 *)(C + (gidIn.y + tid.y) * n + gidIn.x + tid.x * 4);
-        *c = Cval * alpha + *c * beta;
+        *c = (Cval[0] + Cval[1] + Cval[2] + Cval[3]) * alpha + *c * beta;
     }
 }
