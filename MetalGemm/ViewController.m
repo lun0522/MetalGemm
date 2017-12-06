@@ -33,9 +33,10 @@
     
     // tuned v1: 16 16 16 16
     // tuned v2:  4 16 16 16
-    // tuned v3:  4 16 16 16
-    MetalGemm *metalGemmTunedV2 = [[MetalGemm alloc] initWithKernel:@"MetalGemmTunedV2"
-                                                   threadgroupWidth:4
+    // tuned v3:  2 16 16 16
+    // tuned v4:  4 16 16 16
+    MetalGemm *metalGemmTunedV2 = [[MetalGemm alloc] initWithKernel:@"MetalGemmTunedV3"
+                                                   threadgroupWidth:2
                                                   threadgroupHeight:16
                                             threadgroupCoveredWidth:16
                                            threadgroupCoveredHeight:16];
